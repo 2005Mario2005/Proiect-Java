@@ -103,7 +103,7 @@ public class CursService {
         List<Curs> cursuriSortate = new ArrayList<>(listaCursuri);
 
         // metoda de sortare apelata folosind titlul cursului ca referinta
-        cursuriSortate.sort(Comparator.comparing(Curs::getTitlu));
+        cursuriSortate.sort(Comparator.comparing(Curs::getTitlu, String.CASE_INSENSITIVE_ORDER));
 
         return cursuriSortate;
     }
