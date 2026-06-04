@@ -1,6 +1,6 @@
 package com.pao.proiect.elearning.model;
 
-// Cerinta 2.1: Ierarhie de mostenire (nivelul 2)
+//clasa care mosteneste Utilizator si adauga atribute specifice profesorului
 public class Profesor extends Utilizator {
 
     private String departament;
@@ -10,14 +10,12 @@ public class Profesor extends Utilizator {
         this.departament = departament;
     }
 
-    // Cerinta 2.1: Getteri si setteri
     public String getDepartament() { return departament; }
     public void setDepartament(String departament) { this.departament = departament; }
 
-    // Cerinta 2.1: Metoda toString suprascrisa
     @Override
     public String toString() {
-        return "Profesor [" + super.toString() + ", Departament: " + departament + "]";
+        return "[Profesor] " + super.toString() + " | Departament: " + departament;
     }
 
     @Override

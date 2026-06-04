@@ -1,9 +1,11 @@
 package com.pao.proiect.elearning.model;
 
+//clasa care modeleaza o intrebare specifica unui anumit quiz
 public class Intrebare {
+
     private Long id;
     private String text;
-    private Quiz quiz; // din ce quiz face parte
+    private Quiz quiz;
 
     public Intrebare(Long id, String text, Quiz quiz) {
         this.id = id;
@@ -22,6 +24,6 @@ public class Intrebare {
 
     @Override
     public String toString() {
-        return "Intrebare: " + text;
+        return "[Intrebare] ID: " + id + " | Text: " + text + " | Quiz: " + quiz.getTitlu();
     }
 }

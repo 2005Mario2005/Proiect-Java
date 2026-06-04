@@ -2,10 +2,9 @@ package com.pao.proiect.elearning.model;
 
 import java.util.Objects;
 
-// Cerinta 2.1: Cel putin o clasa abstracta in ierarhie
+//clasa abstracta de baza pentru toti utilizatorii din sistem
 public abstract class Utilizator {
 
-    // Cerinta 2.1: Atribute protected pentru a fi vazute in clasele copil
     protected Long id;
     protected String nume;
     protected String email;
@@ -16,7 +15,6 @@ public abstract class Utilizator {
         this.email = email;
     }
 
-    // Cerinta 2.1: Getteri si setteri
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -26,7 +24,7 @@ public abstract class Utilizator {
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
 
-    // Cerinta 2.1: Metode equals si hashCode suprascrise
+    //metodele equals si hashCode pentru a compara utilizatorii dupa ID
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -40,12 +38,10 @@ public abstract class Utilizator {
         return Objects.hash(id);
     }
 
-    // Cerinta 2.1: Metoda toString suprascrisa
     @Override
     public String toString() {
-        return "ID: " + id + ", Nume: " + nume + ", Email: " + email;
+        return "ID: " + id + " | Nume: " + nume + " | Email: " + email;
     }
 
-    // metoda abstracta pe care copiii sunt obligati sa o implementeze
     public abstract String getRol();
 }

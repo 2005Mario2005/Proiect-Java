@@ -1,21 +1,29 @@
 package com.pao.proiect.elearning.model;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
+//clasa care modeleaza un curs si contine liste pentru a nu pierde modulele adaugate
 public class Curs {
-    // Cerinta 2.1: Atribute private pentru incapsulare
+
     private Long id;
     private String titlu;
-    private Profesor profesor; // relatie de compozitie (un curs are un profesor)
+    private Profesor profesor;
 
-    // constructor pentru a initializa obiectul complet la creare
+    //sunt adaugate liste pentru a pastra referinte catre lectiile si quiz-urile cursului
+    private List<Lectie> lectii;
+    private List<Quiz> quizuri;
+
     public Curs(Long id, String titlu, Profesor profesor) {
         this.id = id;
         this.titlu = titlu;
         this.profesor = profesor;
+        //se initializeaza listele goale la crearea obiectului
+        this.lectii = new ArrayList<>();
+        this.quizuri = new ArrayList<>();
     }
 
-    // Cerinta 2.1: Getteri si setteri
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -25,7 +33,19 @@ public class Curs {
     public Profesor getProfesor() { return profesor; }
     public void setProfesor(Profesor profesor) { this.profesor = profesor; }
 
-    // Cerinta 2.1: A doua clasa cu equals si hashCode suprascrise (comparam dupa ID)
+    public List<Lectie> getLectii() { return lectii; }
+    public List<Quiz> getQuizuri() { return quizuri; }
+
+    //sunt expuse metode pentru adaugarea elementelor in liste
+    public void adaugaLectie(Lectie lectie) {
+        this.lectii.add(lectie);
+    }
+
+    public void adaugaQuiz(Quiz quiz) {
+        this.quizuri.add(quiz);
+    }
+
+    //sunt utilizate metodele equals si hashCode pentru compararea dupa ID
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -39,9 +59,8 @@ public class Curs {
         return Objects.hash(id);
     }
 
-    // Cerinta 2.1: Metoda toString suprascrisa
     @Override
     public String toString() {
-        return "Curs [ID: " + id + ", Titlu: " + titlu + ", Predat de: " + profesor.getNume() + "]";
+        return "[Curs] ID: " + id + " | Titlu: " + titlu + " | Predat de: " + profesor.getNume();
     }
 }

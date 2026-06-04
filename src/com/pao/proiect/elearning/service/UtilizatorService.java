@@ -1,29 +1,24 @@
 package com.pao.proiect.elearning.service;
 
+import com.pao.proiect.elearning.exception.EmailDuplicatException;
 import com.pao.proiect.elearning.exception.UtilizatorInexistentException;
 import com.pao.proiect.elearning.model.Utilizator;
+import com.pao.proiect.elearning.repository.UtilizatorRepository;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
-// Cerinta 2.3: Cel putin 2 clase de serviciu
 public class UtilizatorService {
 
-    // Cerinta 2.3: Singleton - instanta unica, statica si privata
     private static UtilizatorService instance;
+    private final UtilizatorRepository utilizatorRepository;
+    private final AuditService auditService;
 
-    // Cerinta 2.2: Cel putin un Map folosit pentru indexare
-    // retin toti utilizatorii (cheia e ID-ul, valoarea e obiectul Utilizator)
-    private final Map<Long, Utilizator> utilizatoriMap;
-
-    // Cerinta 2.3: Singleton - constructor privat
     private UtilizatorService() {
-        this.utilizatoriMap = new HashMap<>();
+        this.utilizatorRepository = new UtilizatorRepository();
+        this.auditService = AuditService.getInstance();
     }
 
-    // Cerinta 2.3: Singleton - metoda statica getInstance()
     public static UtilizatorService getInstance() {
         if (instance == null) {
             instance = new UtilizatorService();
@@ -31,40 +26,49 @@ public class UtilizatorService {
         return instance;
     }
 
-    // Cerinta 2.3: Operatie CRUD - Adaugare
     public void adaugaUtilizator(Utilizator u) {
-        // Cerinta 2.4: Fara NullPointerException
-        if (u == null || u.getId() == null) {
-            System.out.println("Eroare: Utilizatorul sau ID-ul este null!");
+        if (u == null) {
+            System.out.println("Eroare: Utilizatorul este null!");
             return;
         }
-        utilizatoriMap.put(u.getId(), u);
-        System.out.println("Utilizator adaugat cu succes: " + u.getNume());
+
+        //se verifica existenta email-ului aducand lista curenta din baza de date
+        List<Utilizator> existenti = utilizatorRepository.findAll();
+        for (Utilizator existent : existenti) {
+            if (existent.getEmail().equalsIgnoreCase(u.getEmail())) {
+                throw new EmailDuplicatException("Email-ul " + u.getEmail() + " este deja folosit de alt utilizator!");
+            }
+        }
+
+        //se salveaza utilizatorul in baza de date (ID-ul va fi generat si setat de repository)
+        utilizatorRepository.save(u);
+
+        //este inregistrata actiunea in fisierul de audit
+        auditService.logheazaActiune("adauga_utilizator");
+        System.out.println("Utilizator adaugat cu succes in DB: " + u.toString());
     }
 
-    // Cerinta 2.3: Operatie CRUD - Cautare dupa ID
     public Utilizator cautaDupaId(Long id) {
-        Utilizator u = utilizatoriMap.get(id);
-        if (u == null) {
-            // Cerinta 2.1: exceptia custom daca nu exista persoana
-            throw new UtilizatorInexistentException("Nu exista niciun utilizator cu ID-ul: " + id);
+        Optional<Utilizator> utilizatorOpt = utilizatorRepository.findById(id);
+
+        if (utilizatorOpt.isEmpty()) {
+            throw new UtilizatorInexistentException("Nu exista niciun utilizator in DB cu ID-ul: " + id);
         }
-        return u;
+
+        auditService.logheazaActiune("cauta_utilizator_id");
+        return utilizatorOpt.get();
     }
 
-    // Cerinta 2.3: Operatie CRUD - Stergere
     public void stergeUtilizator(Long id) {
-        // Verificam intai daca exista in Map
-        if (!utilizatoriMap.containsKey(id)) {
-            throw new UtilizatorInexistentException("Nu se poate sterge. ID inexistent: " + id);
-        }
-        utilizatoriMap.remove(id);
-        System.out.println("Utilizatorul cu ID-ul " + id + " a fost sters.");
+        Utilizator u = cautaDupaId(id);
+        utilizatorRepository.delete(id);
+
+        auditService.logheazaActiune("sterge_utilizator");
+        System.out.println("Utilizatorul " + u.getNume() + " (ID: " + id + ") a fost sters definitiv.");
     }
 
-    // Cerinta 2.3: Operatie CRUD - Listare toate
-    // valorile din Map sub forma de lista
     public List<Utilizator> getTotiUtilizatorii() {
-        return new ArrayList<>(utilizatoriMap.values());
+        auditService.logheazaActiune("listeaza_utilizatori");
+        return utilizatorRepository.findAll();
     }
 }

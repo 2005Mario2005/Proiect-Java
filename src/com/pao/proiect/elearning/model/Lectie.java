@@ -1,9 +1,11 @@
 package com.pao.proiect.elearning.model;
 
+//clasa care modeleaza o lectie asociata unui curs
 public class Lectie {
+
     private Long id;
     private String titlu;
-    private Curs curs; // de ce curs apartine lectia
+    private Curs curs;
 
     public Lectie(Long id, String titlu, Curs curs) {
         this.id = id;
@@ -22,6 +24,6 @@ public class Lectie {
 
     @Override
     public String toString() {
-        return "Lectie: " + titlu;
+        return "[Lectie] ID: " + id + " | Titlu: " + titlu + " | Curs: " + curs.getTitlu();
     }
 }

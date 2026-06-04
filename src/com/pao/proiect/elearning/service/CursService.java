@@ -3,29 +3,33 @@ package com.pao.proiect.elearning.service;
 import com.pao.proiect.elearning.exception.NotaInvalidaException;
 import com.pao.proiect.elearning.exception.StudentDejaInscrisException;
 import com.pao.proiect.elearning.model.*;
+import com.pao.proiect.elearning.repository.CursRepository;
+import com.pao.proiect.elearning.repository.LectieRepository;
+import com.pao.proiect.elearning.repository.QuizRepository;
+import com.pao.proiect.elearning.util.DatabaseConnection;
 
-import java.util.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
 
-// Cerinta 2.3: Al doilea serviciu
 public class CursService {
 
-    // Cerinta 2.3: Singleton
     private static CursService instance;
-
-    // toate cursurile platformei
-    private final List<Curs> listaCursuri;
-
-    // map pentru evidenta inscrierilor: cheia este ID-ul cursului -> Set-ul de studenti inscrisi
-    // utilizez Set pentru a nu permite duplicate (Cerinta 2.2: Colectii multiple)
-    private final Map<Long, Set<Student>> inscrieriMap;
-
-    // istoricul notelor
-    private final List<RezultatQuiz> rezultateSistem;
+    private final CursRepository cursRepository;
+    private final LectieRepository lectieRepository;
+    private final QuizRepository quizRepository;
+    private final AuditService auditService;
 
     private CursService() {
-        this.listaCursuri = new ArrayList<>();
-        this.inscrieriMap = new HashMap<>();
-        this.rezultateSistem = new ArrayList<>();
+        this.cursRepository = new CursRepository();
+        this.lectieRepository = new LectieRepository();
+        this.quizRepository = new QuizRepository();
+        this.auditService = AuditService.getInstance();
     }
 
     public static CursService getInstance() {
@@ -35,98 +39,152 @@ public class CursService {
         return instance;
     }
 
-    // Cerinta 2.3: Operatie CRUD - Adaugare curs
     public void adaugaCurs(Curs curs) {
-        if (curs == null || curs.getId() == null) return;
-        listaCursuri.add(curs);
-
-        // i se atribuie automat o lista goala de studenti
-        inscrieriMap.put(curs.getId(), new HashSet<>());
-        System.out.println("Curs creat: " + curs.getTitlu());
+        if (curs == null) return;
+        cursRepository.save(curs);
+        auditService.logheazaActiune("adauga_curs");
+        System.out.println("Curs salvat cu succes in DB: " + curs.toString());
     }
 
-    // Cerinta 2.3: Operatie CRUD - Cautare curs dupa ID
     public Curs cautaCursDupaId(Long id) {
-        for (Curs c : listaCursuri) {
-            if (c.getId().equals(id)) {
-                return c;
+        Optional<Curs> cursOpt = cursRepository.findById(id);
+        if (cursOpt.isEmpty()) {
+            throw new RuntimeException("Nu exista niciun curs cu ID-ul: " + id);
+        }
+        auditService.logheazaActiune("cauta_curs_id");
+        return cursOpt.get();
+    }
+
+    public Quiz cautaQuizDupaId(Long idQuiz) {
+        Optional<Quiz> quizOpt = quizRepository.findById(idQuiz);
+        if (quizOpt.isEmpty()) {
+            throw new RuntimeException("Nu exista niciun quiz in DB cu ID-ul: " + idQuiz);
+        }
+        auditService.logheazaActiune("cauta_quiz_id");
+        return quizOpt.get();
+    }
+
+    public void adaugaLectieLaCurs(Lectie lectie, Curs curs) {
+        lectieRepository.save(lectie);
+        auditService.logheazaActiune("adauga_lectie");
+        System.out.println("Lectie adaugata in DB: " + lectie.toString());
+    }
+
+    public void adaugaQuizLaCurs(Quiz quiz, Curs curs) {
+        quizRepository.save(quiz);
+        auditService.logheazaActiune("adauga_quiz");
+        System.out.println("Quiz adaugat in DB: " + quiz.toString());
+    }
+
+    //tranzactie explicita (commit / rollback)
+    public void inscrieStudent(Curs curs, Student student) {
+        String insertSql = "INSERT INTO inscrieri (id_curs, id_student) VALUES (?, ?)";
+        Connection conn = null;
+
+        try {
+            conn = DatabaseConnection.getInstance().getConnection();
+            conn.setAutoCommit(false); // (II) tranzactie explicita JDBC
+
+            try (PreparedStatement pstmtInsert = conn.prepareStatement(insertSql)) {
+                pstmtInsert.setLong(1, curs.getId());
+                pstmtInsert.setLong(2, student.getId());
+                pstmtInsert.executeUpdate();
+            }
+
+            conn.commit(); //(II) in caz de succes
+            auditService.logheazaActiune("inscrie_student_curs");
+            System.out.println(student.getNume() + " s-a inscris la " + curs.getTitlu());
+
+        } catch (SQLException e) {
+            if (conn != null) {
+                try {
+                    conn.rollback(); //(II) in caz de eroare
+                } catch (SQLException ex) {
+                    System.out.println("Eroare la rollback: " + ex.getMessage());
+                }
+            }
+            throw new StudentDejaInscrisException("Studentul este deja inscris sau a aparut o eroare de DB.");
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true); //resetare auto-commit la starea initiala
+                } catch (SQLException e) {
+                    System.out.println("Eroare resetare conexiune.");
+                }
             }
         }
-        // daca nu exista cursul
-        throw new RuntimeException("Nu exista niciun curs cu ID-ul: " + id);
     }
 
-    // Cerinta 2.3: Operatie CRUD - Stergere curs
-    public void stergeCurs(Long id) {
-        // utilizez metoda de cautare ca sa verific daca exista
-        Curs cursDeSters = cautaCursDupaId(id);
+    public void salveazaRezultat(Student student, Quiz quiz, double nota) {
+        if (nota < 1 || nota > 10) {
+            throw new NotaInvalidaException("Nota " + nota + " nu este permisa. Trebuie sa fie intre 1 si 10.");
+        }
 
-        listaCursuri.remove(cursDeSters);
-        inscrieriMap.remove(id); // sterg si evidenta studentilor la acest curs
+        String sql = "INSERT INTO rezultate (id_student, id_quiz, nota) VALUES (?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-        System.out.println("Cursul a fost sters cu succes: " + cursDeSters.getTitlu());
+            pstmt.setLong(1, student.getId());
+            pstmt.setLong(2, quiz.getId());
+            pstmt.setDouble(3, nota);
+            pstmt.executeUpdate();
+
+            auditService.logheazaActiune("salveaza_rezultat_quiz");
+            System.out.println("Nota salvata in DB pentru studentul " + student.getNume() + " la quiz-ul " + quiz.getTitlu());
+
+        } catch (SQLException e) {
+            System.out.println("Eroare la salvarea notei in baza de date: " + e.getMessage());
+        }
     }
 
-    // Cerinta 2.3: Operatie CRUD - Listarea tuturor cursurilor
     public List<Curs> getToateCursurile() {
-        return listaCursuri;
+        auditService.logheazaActiune("listeaza_cursuri");
+        return cursRepository.findAll();
     }
 
-    // Operatii specifice platformei
-
-    // inscriere Student la Curs
-    public void inscrieStudent(Curs curs, Student student) {
-        Set<Student> inscrisi = inscrieriMap.get(curs.getId());
-
-        // Cerinta 2.1: verific daca studentul e deja inscris la curs
-        if (inscrisi.contains(student)) {
-            throw new StudentDejaInscrisException("Studentul " + student.getNume() + " este deja la cursul " + curs.getTitlu());
-        }
-
-        inscrisi.add(student);
-        System.out.println(student.getNume() + " s-a inscris cu succes la " + curs.getTitlu());
-    }
-
-    // salvare nota
-    public void salveazaRezultat(RezultatQuiz rezultat) {
-        // Cerinta 2.1: verific ca nota pusa e valida
-        if (rezultat.getNota() < 1 || rezultat.getNota() > 10) {
-            throw new NotaInvalidaException("Nota " + rezultat.getNota() + " nu este permisa. Trebuie sa fie intre 1 si 10.");
-        }
-        rezultateSistem.add(rezultat);
-        System.out.println("Nota " + rezultat.getNota() + " a fost salvata pentru " + rezultat.getStudent().getNume());
-    }
-
-    // Cerinta 2.2: Colectie sortata (cursurile sortate alfabetic)
     public List<Curs> getCursuriSortateAlfabetic() {
-        // copie a listei pentru a nu strica ordinea originala din sistem
-        List<Curs> cursuriSortate = new ArrayList<>(listaCursuri);
-
-        // metoda de sortare apelata folosind titlul cursului ca referinta
-        cursuriSortate.sort(Comparator.comparing(Curs::getTitlu, String.CASE_INSENSITIVE_ORDER));
-
-        return cursuriSortate;
+        auditService.logheazaActiune("listeaza_cursuri_sortate");
+        List<Curs> cursuri = cursRepository.findAll();
+        cursuri.sort(Comparator.comparing(Curs::getTitlu, String.CASE_INSENSITIVE_ORDER));
+        return cursuri;
     }
 
-    // afisarea cursurilor predate de un profesor
     public List<Curs> getCursuriProfesor(Profesor profesor) {
+        auditService.logheazaActiune("listeaza_cursuri_profesor");
         List<Curs> cursurileLui = new ArrayList<>();
-
-        for (Curs c : listaCursuri) {
-            if (c.getProfesor().equals(profesor)) { // compara dupa ID
+        for (Curs c : cursRepository.findAll()) {
+            if (c.getProfesor().getId().equals(profesor.getId())) {
                 cursurileLui.add(c);
             }
         }
         return cursurileLui;
     }
 
-    // istoric note student
+    //(III) JOIN 1/3
     public List<RezultatQuiz> getIstoricStudent(Student student) {
+        auditService.logheazaActiune("vizualizare_istoric_student");
         List<RezultatQuiz> istoric = new ArrayList<>();
-        for (RezultatQuiz r : rezultateSistem) {
-            if (r.getStudent().equals(student)) {
-                istoric.add(r);
+
+        String sql = "SELECT r.id, r.nota, q.id AS q_id, q.titlu AS q_titlu, q.id_curs " +
+                "FROM rezultate r JOIN quizuri q ON r.id_quiz = q.id WHERE r.id_student = ?";
+
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, student.getId());
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    Long idRezultat = rs.getLong("id");
+                    double nota = rs.getDouble("nota");
+                    Quiz quizDinJoin = new Quiz(rs.getLong("q_id"), rs.getString("q_titlu"),
+                            new Curs(rs.getLong("id_curs"), "Curs implicit", null));
+
+                    istoric.add(new RezultatQuiz(idRezultat, student, quizDinJoin, nota));
+                }
             }
+        } catch (SQLException e) {
+            System.out.println("Eroare JOIN istoric: " + e.getMessage());
         }
         return istoric;
     }
